@@ -1,0 +1,45 @@
+.TH KISSMUX 1 "February 2026" "kissmux" "User Commands"
+.SH NAME
+kissmux \- KISS device to TCP KISS multiplexer
+.SH SYNOPSIS
+.B kissmux
+[\fB\-listen\fR \fIADDR\fR]
+[\fB\-device\fR \fIPATH\fR]
+[\fB\-max-frame\fR \fIN\fR]
+[\fB\-drop-after\fR \fIDURATION\fR]
+.SH DESCRIPTION
+.B kissmux
+owns a single KISS device (e.g. /dev/soundmodem0) and exposes it as a multi-client
+TCP KISS hub. Inbound frames from the device are broadcast to all connected clients.
+Outbound frames from clients are serialized to the device to prevent interleaving.
+.SH OPTIONS
+.TP
+.B \-listen
+TCP listen address (default :8001).
+.TP
+.B \-device
+KISS device path (default /dev/soundmodem0).
+.TP
+.B \-max-frame
+Maximum KISS payload bytes allowed inside a frame (default 4096).
+Oversized frames reset the parser.
+.TP
+.B \-drop-after
+Drop slow clients if writes block longer than this (default 2s).
+.SH EXAMPLES
+Start a LAN-visible hub on port 8001:
+.PP
+.RS
+kissmux -listen :8001 -device /dev/soundmodem0
+.RE
+.PP
+Bind to localhost only (recommended if you will firewall/port-forward separately):
+.PP
+.RS
+kissmux -listen 127.0.0.1:8001
+.RE
+.SH NOTES
+KISS frames are delimited by 0xC0 and use 0xDB escaping. kissmux does not interpret AX.25/APRS contents.
+.SH AUTHOR
+AE4OK ecosystem tooling
+
