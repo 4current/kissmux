@@ -93,27 +93,31 @@ type client struct {
 }
 
 type hub struct {
-	dev       io.ReadWriteCloser
-	listener  net.Listener
-	maxFrame  int
-	writeCh   chan []byte
-	addCh     chan *client
-	delCh     chan *client
-	bcastCh   chan []byte
-	nextID    atomic.Uint64
-	dropAfter time.Duration
+	dev         io.ReadWriteCloser
+	listener    net.Listener
+	maxFrame    int
+	clientBuf   int
+	idleTimeout time.Duration
+	writeCh     chan []byte
+	addCh       chan *client
+	delCh       chan *client
+	bcastCh     chan []byte
+	nextID      atomic.Uint64
+	dropAfter   time.Duration
 }
 
-func newHub(dev io.ReadWriteCloser, lis net.Listener, maxFrame int, clientBuf int, dropAfter time.Duration) *hub {
+func newHub(dev io.ReadWriteCloser, lis net.Listener, maxFrame int, clientBuf int, dropAfter time.Duration, idleTimeout time.Duration) *hub {
 	return &hub{
-		dev:       dev,
-		listener:  lis,
-		maxFrame:  maxFrame,
-		writeCh:   make(chan []byte, 256),
-		addCh:     make(chan *client),
-		delCh:     make(chan *client),
-		bcastCh:   make(chan []byte, 256),
-		dropAfter: dropAfter,
+		dev:         dev,
+		listener:    lis,
+		maxFrame:    maxFrame,
+		clientBuf:   clientBuf,
+		idleTimeout: idleTimeout,
+		writeCh:     make(chan []byte, 256),
+		addCh:       make(chan *client),
+		delCh:       make(chan *client),
+		bcastCh:     make(chan []byte, 256),
+		dropAfter:   dropAfter,
 	}
 }
 
@@ -183,11 +187,16 @@ func (h *hub) run(ctx context.Context) error {
 					continue
 				}
 			}
+			if tc, ok := c.(*net.TCPConn); ok {
+				_ = tc.SetKeepAlive(true)
+				_ = tc.SetKeepAlivePeriod(30 * time.Second)
+			}
+
 			id := h.nextID.Add(1)
 			cl := &client{
 				id:   id,
 				conn: c,
-				out:  make(chan []byte, 128),
+				out:  make(chan []byte, h.clientBuf),
 			}
 			h.addCh <- cl
 		}
@@ -286,10 +295,12 @@ func (h *hub) clientWriter(ctx context.Context, cl *client) {
 
 func main() {
 	var (
-		listen    = flag.String("listen", ":8001", "TCP listen address (e.g. 127.0.0.1:8001 or :8001)")
-		device    = flag.String("device", "/dev/soundmodem0", "KISS device path (e.g. /dev/soundmodem0)")
-		maxFrame  = flag.Int("max-frame", 4096, "Max KISS payload bytes inside frame (safety)")
-		dropAfter = flag.Duration("drop-after", 2*time.Second, "Drop clients if writes block longer than this")
+		listen      = flag.String("listen", ":8001", "TCP listen address (e.g. 127.0.0.1:8001 or :8001)")
+		device      = flag.String("device", "/dev/soundmodem0", "KISS device path (e.g. /dev/soundmodem0)")
+		maxFrame    = flag.Int("max-frame", 4096, "Max KISS payload bytes inside frame (safety)")
+		dropAfter   = flag.Duration("drop-after", 2*time.Second, "Drop clients if writes block longer than this")
+		clientBuf   = flag.Int("client-buf", 128, "Per-client outbound buffer size")
+		idleTimeout = flag.Duration("idle-timeout", 0*time.Second, "Disconnect clients idle for this long (0 to disable)")
 	)
 	flag.Parse()
 
@@ -312,11 +323,10 @@ func main() {
 
 	log.Printf("kissmux starting: device=%s listen=%s", *device, *listen)
 
-	h := newHub(dev, lis, *maxFrame, 128, *dropAfter)
+	h := newHub(dev, lis, *maxFrame, *clientBuf, *dropAfter, *idleTimeout)
 	if err := h.run(ctx); err != nil {
 		log.Fatalf("run: %v", err)
 	}
 
 	log.Printf("kissmux stopped")
 }
-

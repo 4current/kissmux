@@ -1,45 +1,86 @@
 .TH KISSMUX 1 "February 2026" "kissmux" "User Commands"
+
 .SH NAME
 kissmux \- KISS device to TCP KISS multiplexer
+
 .SH SYNOPSIS
 .B kissmux
 [\fB\-listen\fR \fIADDR\fR]
 [\fB\-device\fR \fIPATH\fR]
 [\fB\-max-frame\fR \fIN\fR]
+[\fB\-client-buf\fR \fIN\fR]
 [\fB\-drop-after\fR \fIDURATION\fR]
+[\fB\-idle-timeout\fR \fIDURATION\fR]
+
 .SH DESCRIPTION
 .B kissmux
 owns a single KISS device (e.g. /dev/soundmodem0) and exposes it as a multi-client
-TCP KISS hub. Inbound frames from the device are broadcast to all connected clients.
-Outbound frames from clients are serialized to the device to prevent interleaving.
+TCP KISS hub.
+
+Inbound frames from the device are broadcast to all connected TCP clients.
+Outbound frames from clients are serialized before being written to the device
+to prevent frame interleaving.
+
+kissmux does not interpret AX.25 or APRS contents. It operates purely at the
+KISS framing layer.
+
 .SH OPTIONS
+
 .TP
 .B \-listen
 TCP listen address (default :8001).
+Examples:
+127.0.0.1:8001 (localhost only)
+:8001 (all interfaces)
+
 .TP
 .B \-device
-KISS device path (default /dev/soundmodem0).
+Path to KISS device (default /dev/soundmodem0).
+
 .TP
 .B \-max-frame
-Maximum KISS payload bytes allowed inside a frame (default 4096).
-Oversized frames reset the parser.
+Maximum allowed payload size (bytes) inside a single KISS frame.
+Oversized frames reset the parser for safety.
+Default: 4096.
+
+.TP
+.B \-client-buf
+Per-client outbound channel buffer size (number of frames).
+If a client falls behind and its buffer fills, it will be dropped.
+Default: 128.
+
 .TP
 .B \-drop-after
-Drop slow clients if writes block longer than this (default 2s).
+Maximum duration allowed for a TCP write to a client.
+If a client blocks longer than this, it is disconnected.
+Default: 2s.
+
+.TP
+.B \-idle-timeout
+Maximum allowed idle time (no reads from client).
+If non-zero, clients exceeding this duration are disconnected.
+A value of 0 disables idle timeouts.
+Default: 0.
+
+.SH OPERATIONAL NOTES
+Only kissmux should open the KISS device.
+All other applications (e.g., APRX, YAAC) should connect via TCP.
+
+Slow or non-responsive TCP clients are dropped to protect the RF path.
+
 .SH EXAMPLES
-Start a LAN-visible hub on port 8001:
+
+Start locally (recommended for use with APRX):
+.PP
+.RS
+kissmux -listen 127.0.0.1:8001 -device /dev/soundmodem0
+.RE
+
+Expose to LAN clients:
 .PP
 .RS
 kissmux -listen :8001 -device /dev/soundmodem0
 .RE
-.PP
-Bind to localhost only (recommended if you will firewall/port-forward separately):
-.PP
-.RS
-kissmux -listen 127.0.0.1:8001
-.RE
-.SH NOTES
-KISS frames are delimited by 0xC0 and use 0xDB escaping. kissmux does not interpret AX.25/APRS contents.
-.SH AUTHOR
-AE4OK ecosystem tooling
 
+.SH AUTHOR
+AE4OK infrastructure tooling
