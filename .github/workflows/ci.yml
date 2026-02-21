@@ -1,16 +1,48 @@
 name: ci
+
 on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-      - run: go test ./...
-      - run: go build ./cmd/kissmux
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Uses the version from go.mod
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go env
+        run: |
+          go version
+          go env
+
+      - name: Format check
+        run: |
+          test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: |
+          go vet ./...
+
+      - name: Test
+        run: |
+          go test ./... -race
+        # -race works on linux+mac; if it causes trouble, remove it.
+
+      - name: Build
+        run: |
+          go build ./...
+          
