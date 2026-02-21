@@ -335,6 +335,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	go func() {
+		<-ctx.Done()
+		_ = lis.Close() // unblocks Accept()
+		_ = dev.Close() // unblocks device Read()
+	}()
+
 	log.Printf("kissmux starting: device=%s listen=%s", *device, *listen)
 
 	h := newHub(dev, lis, *maxFrame, *clientBuf, *dropAfter, *idleTimeout)
