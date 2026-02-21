@@ -213,6 +213,7 @@ func (h *hub) run(ctx context.Context) error {
 			if _, ok := clients[cl]; ok {
 				delete(clients, cl)
 				if cl.closing.CompareAndSwap(false, true) {
+					log.Printf("client %d disconnecting addr=%s", cl.id, cl.conn.RemoteAddr())
 					_ = cl.conn.Close()
 					close(cl.out)
 				}
@@ -244,7 +245,6 @@ func (h *hub) clientReader(ctx context.Context, cl *client) {
 	buf := make([]byte, 4096)
 	fr := newKISSFramer(h.maxFrame)
 	for {
-		_ = cl.conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
 		n, err := cl.conn.Read(buf)
 		if n > 0 {
 			feedErr := fr.feed(buf[:n], func(frame []byte) {
@@ -258,14 +258,22 @@ func (h *hub) clientReader(ctx context.Context, cl *client) {
 				return
 			}
 		}
+
 		if err != nil {
+			// Any read error means the client is gone (EOF/reset/etc).
 			var ne net.Error
 			if errors.As(err, &ne) && ne.Timeout() {
-				// keepalive timeout: drop idle client
+				log.Printf("client %d read timeout (idleTimeout=%s)", cl.id, h.idleTimeout)
 				return
 			}
+			if errors.Is(err, io.EOF) {
+				log.Printf("client %d read EOF (peer closed)", cl.id)
+				return
+			}
+			log.Printf("client %d read error: %v", cl.id, err)
 			return
 		}
+
 		select {
 		case <-ctx.Done():
 			return
@@ -285,6 +293,12 @@ func (h *hub) clientWriter(ctx context.Context, cl *client) {
 			_ = cl.conn.SetWriteDeadline(time.Now().Add(h.dropAfter))
 			_, err := cl.conn.Write(frame)
 			if err != nil {
+				var ne net.Error
+				if errors.As(err, &ne) && ne.Timeout() {
+					log.Printf("client %d write timeout (dropAfter=%s)", cl.id, h.dropAfter)
+				} else {
+					log.Printf("client %d write error: %v", cl.id, err)
+				}
 				return
 			}
 		case <-ctx.Done():
