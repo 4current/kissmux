@@ -1,3 +1,15 @@
+# Go build artifacts
+dist/
+*.tar.gz
+*.zip
+checksums.txt
+
+# Local build dirs
 bin/
+build/
+
+# macOS
 .DS_Store
 
+# Test binaries
+*.test
