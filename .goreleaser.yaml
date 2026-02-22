@@ -1,0 +1,41 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kissmux
+    main: ./cmd/kissmux
+    binary: kissmux
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.buildDate={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      tar.gz
+    files:
+      - README*
+      - LICENSE*
+      - man/kissmux.1
+      - systemd/kissmux.service
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  sort: asc
+  

@@ -1,0 +1,4 @@
+a00581bbb9b45ebde1067e3b491ae1b68c6572b2407b421b52a7b3d61180d9f6  kissmux_0.0.0-SNAPSHOT-b551ff8_darwin_amd64.tar.gz
+a69af4795dc5969606e6534bc653e06bcf570cb4730ce2c6d80d0924ac3e1c85  kissmux_0.0.0-SNAPSHOT-b551ff8_darwin_arm64.tar.gz
+df8985597bcc2c6ce688119e9b79e32d6bbda278f92412083222de1d98a1f7e5  kissmux_0.0.0-SNAPSHOT-b551ff8_linux_amd64.tar.gz
+40590745d5ead69b52e62e34a9a110b2aa58cbf569232286d7aecdeff1a3572a  kissmux_0.0.0-SNAPSHOT-b551ff8_linux_arm64.tar.gz
