@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	version  = "dev"
-	commnit  = "none"
-	buidDate = "unknown"
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
 )
 
 const (
@@ -326,7 +326,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		log.Printf("kissmux version %s (commit %s, built %s)", version, commnit, buidDate)
+		fmt.Printf("kissmux version %s (commit %s, built %s)", version, commit, buildDate)
 		return
 	}
 
