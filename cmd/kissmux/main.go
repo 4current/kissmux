@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
 const (
 	frameEnd  = 0xC0
 	frameEsc  = 0xDB
@@ -315,8 +321,14 @@ func main() {
 		dropAfter   = flag.Duration("drop-after", 2*time.Second, "Drop clients if writes block longer than this")
 		clientBuf   = flag.Int("client-buf", 128, "Per-client outbound buffer size")
 		idleTimeout = flag.Duration("idle-timeout", 0*time.Second, "Disconnect clients idle for this long (0 to disable)")
+		versionFlag = flag.Bool("version", false, "Print version and exit")
 	)
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("kissmux version %s (commit %s, built %s)", version, commit, buildDate)
+		return
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
