@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -127,12 +128,11 @@ func newHub(dev io.ReadWriteCloser, lis net.Listener, maxFrame int, clientBuf in
 	}
 }
 
-func (h *hub) run(ctx context.Context) error {
+func (h *hub) run(ctx context.Context, cancel context.CancelFunc) error {
 	clients := map[*client]struct{}{}
 
 	// Device reader -> broadcast
 	go func() {
-		defer func() { _ = h.listener.Close() }()
 		buf := make([]byte, 4096)
 		fr := newKISSFramer(h.maxFrame)
 		for {
@@ -146,11 +146,17 @@ func (h *hub) run(ctx context.Context) error {
 				})
 			}
 			if err != nil {
+				// Normal shutdown / device closed
 				if errors.Is(err, os.ErrClosed) || errors.Is(err, net.ErrClosed) {
 					return
 				}
-				// device read errors should stop the process; signal via closing listener
+				if errors.Is(err, io.EOF) {
+					log.Printf("device read EOF (device closed)")
+					return
+				}
+				// Real device failure: log and CANCEL the whole hub (see Change 2)
 				log.Printf("device read error: %v", err)
+				cancel() // trigger whole-hub shutdown on device read error
 				return
 			}
 			select {
@@ -189,10 +195,20 @@ func (h *hub) run(ctx context.Context) error {
 				case <-ctx.Done():
 					return
 				default:
-					log.Printf("accept error: %v", err)
-					continue
 				}
+				// Exit accept loop if listener was closed
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				// (Optional) extra compatibility for some wrapped errors:
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				log.Printf("accept error: %v", err)
+				time.Sleep(200 * time.Millisecond) // avoid busy loop on accept errors
+				continue
 			}
+
 			if tc, ok := c.(*net.TCPConn); ok {
 				_ = tc.SetKeepAlive(true)
 				_ = tc.SetKeepAlivePeriod(30 * time.Second)
@@ -316,7 +332,7 @@ func (h *hub) clientWriter(ctx context.Context, cl *client) {
 func main() {
 	var (
 		listen      = flag.String("listen", ":8001", "TCP listen address (e.g. 127.0.0.1:8001 or :8001)")
-		device      = flag.String("device", "/dev/soundmodem0", "KISS device path (e.g. /dev/soundmodem0)")
+		device      = flag.String("device", "/run/soundmodem0", "KISS device path (e.g. /run/soundmodem0)")
 		maxFrame    = flag.Int("max-frame", 4096, "Max KISS payload bytes inside frame (safety)")
 		dropAfter   = flag.Duration("drop-after", 2*time.Second, "Drop clients if writes block longer than this")
 		clientBuf   = flag.Int("client-buf", 128, "Per-client outbound buffer size")
@@ -356,7 +372,7 @@ func main() {
 	log.Printf("kissmux starting: device=%s listen=%s", *device, *listen)
 
 	h := newHub(dev, lis, *maxFrame, *clientBuf, *dropAfter, *idleTimeout)
-	if err := h.run(ctx); err != nil {
+	if err := h.run(ctx, cancel); err != nil {
 		log.Fatalf("run: %v", err)
 	}
 
